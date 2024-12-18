@@ -4,7 +4,7 @@
 
 int main()
 {
-    std::cout << 19 << std::endl;
+    
 
     return 0;
 }

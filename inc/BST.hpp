@@ -12,8 +12,8 @@ class BST final
         BinNode *left_;
         BinNode *right_;
     public:
-        BinNode(T val) : val_(val), left_(nullptr), right_(nullptr) {};
-
+        BinNode(T val, BinNode* left = nullptr, BinNode* right = nullptr) 
+            : val_(val), left_(nullptr), right_(nullptr) {};
     };
 
     class NodeOwner final
@@ -53,8 +53,10 @@ public:
     ~BST() = default;
     BST(const BST& rhs);
     BST(BST&& rhs) = default; //REVIEW - will std::move(node_owner_) and root_ = rhs.root_ ?
-    // BST& operator= (const BST& rhs);
-    // BST& operator= (BST&& rhs);
+    BST& operator= (const BST& rhs);
+    // BST& operator= (BST&& rhs); // TODO
+
+    void swap(const BST& rhs) noexcept;
 };
 
 template <typename T>
@@ -84,6 +86,22 @@ BST<T>::BST(const BST &rhs)
         throw;
     }
     root_ = node_root;
+}
+
+template <typename T>
+BST<T> &BST<T>::operator=(const BST &rhs)
+{
+    BST<T> tmp{rhs};
+    
+    swap(tmp);
+    return *this;
+}
+
+template <typename T>
+void BST<T>::swap(const BST &rhs) noexcept
+{
+    std::swap(node_owner_, rhs.node_owner_);
+    std::swap(root_, rhs.root_);
 }
 
 template <typename T>
