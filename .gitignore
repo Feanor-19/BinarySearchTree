@@ -1,0 +1,8 @@
+build
+out
+CMakePresets.json
+CMakeUserPresets.json
+.vscode
+perf.data
+perf.data.old
+ref_test_data/*
