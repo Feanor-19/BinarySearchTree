@@ -17,16 +17,20 @@ class BST final
         const T val_;
         BinNode *left_;
         BinNode *right_;
+        BinNode *parent_;
         height_t height_;
     public:
         BinNode(T val, BinNode* left = nullptr, BinNode* right = nullptr) 
-            : val_(val), left_(nullptr), right_(nullptr), height_(1) {};
+            : val_(val), left_(nullptr), right_(nullptr), parent_(nullptr), height_(1) {};
 
         const T& val() const {return val_;}
         BinNode *get_left()  const {return left_;}
         BinNode *get_right() const {return right_;}
-        void set_left (BinNode *new_left)  {left_  = new_left;}
-        void set_right(BinNode *new_right) {right_ = new_right;}
+        void set_left (BinNode *new_left);
+        void set_right(BinNode *new_right);
+        BinNode *get_parent() const {return parent_;}
+        bool is_right_child() const {if (parent_) return (parent_->right_ == this); else return false;}
+        bool is_left_child()  const {if (parent_) return (parent_->left_  == this); else return false;} 
         
         bfactor_t bfactor() const {return height_smart(right_) - height_smart(left_);}
         static height_t height_smart(BinNode *node_ptr) {return (node_ptr ? node_ptr->height_ : 0);} 
@@ -53,11 +57,23 @@ class BST final
     class BSTIterator final
     {
     private:
+        const BST<T> &bst_ptr_;
         BinNode *ptr_;
     public:
-        BSTIterator(BinNode *ptr) : ptr_(ptr) {};
-        
-        // TODO operator++, operator*, operator->
+        BSTIterator(const BST<T> &bst_ptr, BinNode *ptr) : bst_ptr_(bst_ptr), ptr_(ptr) {};
+
+        // UB if end() is dereferenced
+        const T& operator*() const {return ptr_->val();}
+        const T* operator->() const {return &(ptr_->val());}
+
+        bool operator==(const BSTIterator& rhs) const {return ptr_ == rhs.ptr_;}
+        bool operator!=(const BSTIterator& rhs) const {return !operator==(rhs);}
+
+        BSTIterator& operator++();
+        BSTIterator  operator++(int);
+        BSTIterator& operator--();
+        BSTIterator  operator--(int);
+
     };
 
     enum dir_t {LEFT, RIGHT};
@@ -65,13 +81,15 @@ class BST final
 private:
     BinNode *root_;
     NodeOwner node_owner_;
+    BinNode *min_val_node_;
+    BinNode *max_val_node_;
 
     BinNode *copy_subtree(const BinNode &ref_subtree_root);
     BinNode *balance_node(BinNode *node);
-    BSTIterator upper_lower_bound_helper(const T& val, dir_t search_dir);
+    BSTIterator upper_lower_bound_helper(const T& val, dir_t search_dir) const;
     void dump_subtree(std::ostream &stream, BinNode *subtree_root);
 public:
-    BST() : root_(nullptr) {};
+    BST() : root_(nullptr), min_val_node_(nullptr), max_val_node_(nullptr) {};
     ~BST() = default;
     BST(const BST& rhs);
     BST(BST&& rhs) = default; //REVIEW - will std::move(node_owner_) and root_ = rhs.root_ ?
@@ -82,8 +100,11 @@ public:
     BSTIterator lower_bound(const T& val) const;
     BSTIterator upper_bound(const T& val) const;
 
-    BSTIterator begin() const;
-    BSTIterator end() const;
+    BSTIterator begin() const {return BSTIterator{*this, min_val_node_};}
+    BSTIterator end() const {return BSTIterator{*this, nullptr};}
+
+    // BSTIterator min_iter() const {return BSTIterator{*this, min_val_node_};}
+    // BSTIterator max_iter() const {return BSTIterator{*this, max_val_node_};}
 
     void swap(const BST& rhs) noexcept;
 
@@ -134,7 +155,9 @@ typename BST<T>::BSTIterator BST<T>::insert(T val)
     if (!root_) 
     {
         root_ = node_owner_.create({val});
-        return BSTIterator{root_};
+        min_val_node_ = root_;
+        max_val_node_ = root_;
+        return BSTIterator{*this, root_};
     }
 
     std::stack<std::pair<BinNode*, dir_t>> path;
@@ -151,7 +174,7 @@ typename BST<T>::BSTIterator BST<T>::insert(T val)
             path.push({curr_node, dir_t::RIGHT});
             curr_node = curr_node->get_right();
         }
-        else return BSTIterator{curr_node}; // elem already exists
+        else return BSTIterator{*this, curr_node}; // elem already exists
     }
 
     BinNode *created_node = node_owner_.create({val});
@@ -159,6 +182,9 @@ typename BST<T>::BSTIterator BST<T>::insert(T val)
     if      (last_dir == dir_t::LEFT)  last_node->set_left(created_node);
     else if (last_dir == dir_t::RIGHT) last_node->set_right(created_node);
     last_node->update_height();
+
+    if (val < min_val_node_->val()) min_val_node_ = created_node;
+    if (val > max_val_node_->val()) max_val_node_ = created_node;
     
     while (!path.empty())
     {
@@ -171,14 +197,13 @@ typename BST<T>::BSTIterator BST<T>::insert(T val)
 
     root_ = balance_node(root_);
 
-    return BSTIterator{created_node};
+    return BSTIterator{*this, created_node};
 }
 
-
 template <typename T>
-typename BST<T>::BSTIterator BST<T>::upper_lower_bound_helper(const T &val, dir_t search_dir)
+typename BST<T>::BSTIterator BST<T>::lower_bound(const T& val) const
 {
-    //if (!root_) return ... // TODO iterator end()
+    if (!root_) return end();
 
     std::stack<std::pair<BinNode*, dir_t>> path;
     BinNode *curr_node = root_;
@@ -193,10 +218,7 @@ typename BST<T>::BSTIterator BST<T>::upper_lower_bound_helper(const T &val, dir_
                 curr_node = curr_node_left;
             }
             else
-            {
-                if (search_dir == dir_t::LEFT) return BSTIterator{curr_node};
-                else break;
-            } 
+                return BSTIterator{*this, curr_node};
         }
         else if (val > curr_node->val())
         {
@@ -207,35 +229,32 @@ typename BST<T>::BSTIterator BST<T>::upper_lower_bound_helper(const T &val, dir_
                 curr_node = curr_node_right;
             }
             else
-            {
-                if (search_dir == dir_t::RIGHT) return BSTIterator{curr_node};
-                else break;
-            }
+                break;
         }
-        else return BSTIterator{curr_node}; // elem itself
+        else return BSTIterator{*this, curr_node}; // elem itself
     }    
 
     while(!path.empty())
     {
         auto [node, dir] = path.top(); path.pop();
-        if (dir == search_dir)
-            return BSTIterator{node};
+        if (dir == dir_t::LEFT)
+            return BSTIterator{*this, node};
     }
     
-    assert(0);
-    return BSTIterator{nullptr};
-}
-
-template <typename T>
-typename BST<T>::BSTIterator BST<T>::lower_bound(const T& val) const
-{
-    return upper_lower_bound_helper(val, dir_t::LEFT);
+    return end();
 }
 
 template <typename T>
 typename BST<T>::BSTIterator BST<T>::upper_bound(const T &val) const
 {
-    return upper_lower_bound_helper(val, dir_t::RIGHT);
+    auto lower_bound_it = lower_bound(val);
+    if (lower_bound_it == end())
+        return end();
+
+    if (*lower_bound_it == val)
+        return ++lower_bound_it;
+    else
+        return lower_bound_it;
 }
 
 template <typename T>
@@ -300,6 +319,22 @@ void BST<T>::NodeOwner::delete_all()
 }
 
 template <typename T>
+void BST<T>::BinNode::set_left(BinNode *new_left)
+{
+    left_ = new_left; 
+    if (new_left) 
+        new_left->parent_ = this;
+}
+
+template <typename T>
+void BST<T>::BinNode::set_right(BinNode *new_right)
+{
+    right_ = new_right;
+    if (new_right)
+        new_right->parent_ = this;
+}
+
+template <typename T>
 typename BST<T>::height_t BST<T>::BinNode::update_height()
 {
     height_t hl = height_smart(left_), hr = height_smart(right_);
@@ -334,15 +369,105 @@ typename BST<T>::BinNode *BST<T>::balance_node(BinNode *node)
 	{
         BinNode *node_right = node->get_right();
 		if(node_right->bfactor() < 0)
-			node_right = rotate_right(node_right);
+			node->set_right(rotate_right(node_right));
 		return rotate_left(node);
 	}
 	if(node_bfactor == -2)
 	{
         BinNode *node_left = node->get_left();
 		if(node_left->bfactor() > 0)
-			node_left = rotate_left(node_left);
+			node->set_left(rotate_left(node_left));
 		return rotate_right(node);
 	}
 	return node; // balancing isn't needed
+}
+
+template <typename T>
+typename BST<T>::BSTIterator& BST<T>::BSTIterator::operator++()
+{
+    if (!ptr_) return *this; // we are end(), nowhere to increment
+
+    if (ptr_ == bst_ptr_.max_val_node_)
+    {
+        ptr_ = nullptr; //becoming end()
+        return *this;
+    }
+
+    if (ptr_->get_right())
+    {
+        ptr_ = ptr_->get_right();
+        while (ptr_->get_left()) ptr_ = ptr_->get_left();
+        return *this;
+    }
+
+    BinNode *curr_node = ptr_;
+    while (true)
+    {
+        if (curr_node->is_left_child())
+        {
+            ptr_ = curr_node->get_parent();
+            return *this;
+        }
+        else if (curr_node->is_right_child())
+        {
+            curr_node = curr_node->get_parent();
+        }
+        else assert(0);
+    }
+    
+    assert(0);
+    return *this;
+}
+
+template <typename T>
+typename BST<T>::BSTIterator BST<T>::BSTIterator::operator++(int)
+{
+    BSTIterator tmp{*this};
+    operator++();
+    return tmp;
+}
+
+template <typename T>
+typename BST<T>::BSTIterator &BST<T>::BSTIterator::operator--()
+{
+    if (!ptr_) 
+    { // suppose we are end()
+        ptr_ = bst_ptr_.max_val_node_;
+        return *this;
+    };
+
+    if (ptr_ == bst_ptr_.min_val_node_) return *this; // we are begin(), nowhere to decrement
+    
+    if (ptr_->get_left())
+    {
+        ptr_ = ptr_->get_left();
+        while (ptr_->get_right()) ptr_ = ptr_->get_right();
+        return *this;
+    }
+
+    BinNode *curr_node = ptr_;
+    while (true)
+    {
+        if (curr_node->is_right_child())
+        {
+            ptr_ = curr_node->get_parent();
+            return *this;
+        }
+        else if (curr_node->is_left_child())
+        {
+            curr_node = curr_node->get_parent();
+        }
+        else assert(0);
+    }
+    
+    assert(0);
+    return *this;
+}
+
+template <typename T>
+typename BST<T>::BSTIterator BST<T>::BSTIterator::operator--(int)
+{
+    BSTIterator tmp{*this};
+    operator--();
+    return tmp;
 }
