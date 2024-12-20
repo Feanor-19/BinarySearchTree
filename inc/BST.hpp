@@ -86,7 +86,6 @@ private:
 
     BinNode *copy_subtree(const BinNode &ref_subtree_root);
     BinNode *balance_node(BinNode *node);
-    BSTIterator upper_lower_bound_helper(const T& val, dir_t search_dir) const;
     void dump_subtree(std::ostream &stream, BinNode *subtree_root);
 public:
     BST() : root_(nullptr), min_val_node_(nullptr), max_val_node_(nullptr) {};
@@ -102,9 +101,6 @@ public:
 
     BSTIterator begin() const {return BSTIterator{*this, min_val_node_};}
     BSTIterator end() const {return BSTIterator{*this, nullptr};}
-
-    // BSTIterator min_iter() const {return BSTIterator{*this, min_val_node_};}
-    // BSTIterator max_iter() const {return BSTIterator{*this, max_val_node_};}
 
     void swap(const BST& rhs) noexcept;
 
