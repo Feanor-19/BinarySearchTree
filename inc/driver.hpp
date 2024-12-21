@@ -60,7 +60,10 @@ void driver(std::istream &inp, std::ostream &out)
             T fst = 0, snd = 0;
             inp >> fst >> snd;
             if (!inp.eof() && !inp.good()) throw WrongInputE{};
-            out << range_query(container, fst, snd) << std::endl;
+            if (snd <= fst) 
+                out << 0 << std::endl;
+            else
+                out << range_query(container, fst, snd) << std::endl;
         }
     }   
 }
