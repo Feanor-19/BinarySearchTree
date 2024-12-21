@@ -7,17 +7,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 SET(SRC_DIR src)
 
-add_executable(Driver ${SRC_DIR}/main.cpp ${SRC_DIR}/driver.cpp)
+add_executable(Driver ${SRC_DIR}/main.cpp)
 target_include_directories(Driver PUBLIC inc)
+
+add_executable(Ref ${SRC_DIR}/ref_main.cpp)
+target_include_directories(Ref PUBLIC inc)
 
 # Benchmarking using google benchmark
 
-# find_package(benchmark REQUIRED)
+find_package(benchmark REQUIRED)
 
-# add_executable(benchmark ${SRC_DIR}/benchmark.cpp ${SRC_DIR}/driver.cpp)
-# target_include_directories(benchmark PUBLIC inc)
-# target_link_libraries(benchmark benchmark::benchmark)
-# target_link_libraries(benchmark TrianglesLib)
+add_executable(benchmark ${SRC_DIR}/benchmark.cpp)
+target_include_directories(benchmark PUBLIC inc)
+target_link_libraries(benchmark benchmark::benchmark)
 
 # E2E tests
 enable_testing()

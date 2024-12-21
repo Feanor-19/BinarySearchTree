@@ -54,6 +54,9 @@ class BST final
         void delete_all();
     };
 
+    enum dir_t {LEFT, RIGHT};
+
+public:
     class BSTIterator final
     {
     private:
@@ -74,9 +77,14 @@ class BST final
         BSTIterator& operator--();
         BSTIterator  operator--(int);
 
+        using difference_type = std::ptrdiff_t;
+        using value_type = T;
+        using pointer = const T*;
+        using reference = const T&;
+        using iterator_category = std::bidirectional_iterator_tag;
     };
 
-    enum dir_t {LEFT, RIGHT};
+    using iterator = BSTIterator;
 
 private:
     BinNode *root_;
@@ -93,7 +101,7 @@ public:
     BST(const BST& rhs);
     BST(BST&& rhs) = default; //REVIEW - will std::move(node_owner_) and root_ = rhs.root_ ?
     BST& operator= (const BST& rhs);
-    // BST& operator= (BST&& rhs); // TODO
+    BST& operator= (BST&& rhs) = default; //REVIEW - will std::move(node_owner_) and root_ = rhs.root_ ?
 
     BSTIterator insert(T val);
     BSTIterator lower_bound(const T& val) const;
@@ -139,6 +147,8 @@ BST<T>::BST(const BST &rhs)
 template <typename T>
 BST<T> &BST<T>::operator=(const BST &rhs)
 {
+    if (this == &rhs) return *this;
+
     BST<T> tmp{rhs};
     
     swap(tmp);

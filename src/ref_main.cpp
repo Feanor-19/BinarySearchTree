@@ -1,13 +1,13 @@
 #include <iostream>
 
-#include "BST.hpp"
+#include <set>
 #include "driver.hpp"
 
 int main()
 {
     try
     {
-        Driver::driver<BST<int>, int>(std::cin, std::cout);
+        Driver::driver<std::set<int>, int>(std::cin, std::cout);
     }
     catch(const std::exception& e)
     {
