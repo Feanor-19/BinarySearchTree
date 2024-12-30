@@ -21,7 +21,10 @@ class BST final
         height_t height_;
     public:
         BinNode(T val, BinNode* left = nullptr, BinNode* right = nullptr) 
-            : val_(val), left_(nullptr), right_(nullptr), parent_(nullptr), height_(1) {};
+            : val_(val), parent_(nullptr) 
+        {
+            set_left(left); set_right(right); update_height();
+        };
 
         const T& val() const {return val_;}
         BinNode *get_left()  const {return left_;}
@@ -41,17 +44,22 @@ class BST final
     {
     private:
         std::list<BinNode*> own_nodes_;
-    public:
-        NodeOwner() {};
-        NodeOwner(NodeOwner&&) = default; // REVIEW - will std::move(own_nodes_) ?
-        ~NodeOwner();
 
-        NodeOwner(const NodeOwner&)             = delete;
-        NodeOwner& operator= (const NodeOwner&) = delete;
-        NodeOwner& operator= (NodeOwner&&)      = delete;
+        BinNode *copy_subtree(const BinNode *ref_subtree_root);
+    public:
+        BinNode *root_;
+
+        NodeOwner() : root_(nullptr) {};
+        NodeOwner(const NodeOwner& rhs);
+        NodeOwner(NodeOwner&&) = default; // REVIEW ?
+        NodeOwner& operator= (const NodeOwner& rhs); 
+        NodeOwner& operator= (NodeOwner&&) = default; // REVIEW ?
+        ~NodeOwner();
 
         BinNode *create(const BinNode& node);
         void delete_all();
+
+        void swap(const NodeOwner& rhs) noexcept;
     };
 
     enum dir_t {LEFT, RIGHT};
@@ -87,21 +95,14 @@ public:
     using iterator = BSTIterator;
 
 private:
-    BinNode *root_;
     NodeOwner node_owner_;
     BinNode *min_val_node_;
     BinNode *max_val_node_;
 
-    BinNode *copy_subtree(const BinNode &ref_subtree_root);
     BinNode *balance_node(BinNode *node);
     void dump_subtree(std::ostream &stream, BinNode *subtree_root);
 public:
-    BST() : root_(nullptr), min_val_node_(nullptr), max_val_node_(nullptr) {};
-    ~BST() = default;
-    BST(const BST& rhs);
-    BST(BST&& rhs) = default; //REVIEW - will std::move(node_owner_) and root_ = rhs.root_ ?
-    BST& operator= (const BST& rhs);
-    BST& operator= (BST&& rhs) = default; //REVIEW - will std::move(node_owner_) and root_ = rhs.root_ ?
+    BST() : node_owner_{}, min_val_node_(nullptr), max_val_node_(nullptr) {};
 
     BSTIterator insert(T val);
     BSTIterator lower_bound(const T& val) const;
@@ -110,64 +111,22 @@ public:
     BSTIterator begin() const {return BSTIterator{*this, min_val_node_};}
     BSTIterator end() const {return BSTIterator{*this, nullptr};}
 
-    void swap(const BST& rhs) noexcept;
-
     void dump(std::ostream &stream);
 };
 
 template <typename T>
-typename BST<T>::BinNode *BST<T>::copy_subtree(const BinNode &ref_subtree_root)
-{
-    BinNode *ref_left  = ref_subtree_root.left_, *ref_right = ref_subtree_root.right_;
-    BinNode *left = nullptr, *right = nullptr, *res = nullptr;
-    if (ref_left)
-        left = copy_subtree(ref_left);
-    if (ref_right)
-        right = copy_subtree(ref_right);  
-
-    return node_owner_.create(BinNode{ref_subtree_root.val_, left, right});
-}
-
-template <typename T>
-BST<T>::BST(const BST &rhs)
-{
-    BinNode *node_root = nullptr;
-    try
-    {
-        node_root = copy_subtree(rhs.root_);    
-    }
-    catch(...)
-    {
-        node_owner_.delete_all();
-        throw;
-    }
-    root_ = node_root;
-}
-
-template <typename T>
-BST<T> &BST<T>::operator=(const BST &rhs)
-{
-    if (this == &rhs) return *this;
-
-    BST<T> tmp{rhs};
-    
-    swap(tmp);
-    return *this;
-}
-
-template <typename T>
 typename BST<T>::BSTIterator BST<T>::insert(T val)
 {
-    if (!root_) 
+    if (!node_owner_.root_) 
     {
-        root_ = node_owner_.create({val});
-        min_val_node_ = root_;
-        max_val_node_ = root_;
-        return BSTIterator{*this, root_};
+        node_owner_.root_ = node_owner_.create({val});
+        min_val_node_ = node_owner_.root_;
+        max_val_node_ = node_owner_.root_;
+        return BSTIterator{*this, node_owner_.root_};
     }
 
     std::stack<std::pair<BinNode*, dir_t>> path;
-    BinNode *curr_node = root_;
+    BinNode *curr_node = node_owner_.root_;
     while (curr_node)
     {
         if (val < curr_node->val())
@@ -201,7 +160,7 @@ typename BST<T>::BSTIterator BST<T>::insert(T val)
         else if (dir == dir_t::RIGHT) node->set_right(balance_node(node->get_right()));
     }
 
-    root_ = balance_node(root_);
+    node_owner_.root_ = balance_node(node_owner_.root_);
 
     return BSTIterator{*this, created_node};
 }
@@ -209,10 +168,10 @@ typename BST<T>::BSTIterator BST<T>::insert(T val)
 template <typename T>
 typename BST<T>::BSTIterator BST<T>::lower_bound(const T& val) const
 {
-    if (!root_) return end();
+    if (!node_owner_.root_) return end();
 
     std::stack<std::pair<BinNode*, dir_t>> path;
-    BinNode *curr_node = root_;
+    BinNode *curr_node = node_owner_.root_;
     while (curr_node)
     {
         if (val < curr_node->val())
@@ -264,13 +223,6 @@ typename BST<T>::BSTIterator BST<T>::upper_bound(const T &val) const
 }
 
 template <typename T>
-void BST<T>::swap(const BST &rhs) noexcept
-{
-    std::swap(node_owner_, rhs.node_owner_);
-    std::swap(root_, rhs.root_);
-}
-
-template <typename T>
 void BST<T>::dump_subtree(std::ostream &stream, BinNode *subtree_root)
 {
     assert(subtree_root);
@@ -291,7 +243,47 @@ void BST<T>::dump_subtree(std::ostream &stream, BinNode *subtree_root)
 template <typename T>
 void BST<T>::dump(std::ostream &stream)
 {
-    if (root_) dump_subtree(stream, root_);
+    if (node_owner_.root_) dump_subtree(stream, node_owner_.root_);
+}
+
+template <typename T>
+typename BST<T>::BinNode *BST<T>::NodeOwner::copy_subtree(const BinNode *ref_subtree_root)
+{
+    BinNode *ref_left  = ref_subtree_root->get_left(), *ref_right = ref_subtree_root->get_right();
+    BinNode *left = nullptr, *right = nullptr, *res = nullptr;
+    if (ref_left)
+        left = copy_subtree(ref_left);
+    if (ref_right)
+        right = copy_subtree(ref_right);  
+
+    return create(BinNode{ref_subtree_root->val(), left, right});
+}
+
+template <typename T>
+BST<T>::NodeOwner::NodeOwner(const NodeOwner &rhs)
+{
+    BinNode *node_root = nullptr;
+    try
+    {
+        node_root = copy_subtree(rhs.root_);    
+    }
+    catch(...)
+    {
+        delete_all();
+        throw;
+    }
+    root_ = node_root;
+}
+
+template <typename T>
+typename BST<T>::NodeOwner &BST<T>::NodeOwner::operator=(const NodeOwner &rhs)
+{
+    if (this == &rhs) return *this;
+
+    NodeOwner tmp{rhs};
+
+    swap(tmp);
+    return *this;
 }
 
 template <typename T>
@@ -322,6 +314,13 @@ void BST<T>::NodeOwner::delete_all()
 {
     for (auto elem : own_nodes_)
         delete elem;
+}
+
+template <typename T>
+inline void BST<T>::NodeOwner::swap(const NodeOwner &rhs) noexcept
+{
+    std::swap(own_nodes_, rhs.own_nodes_);
+    std::swap(root_, rhs.root_);
 }
 
 template <typename T>
